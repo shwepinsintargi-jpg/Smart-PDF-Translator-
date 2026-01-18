@@ -14,24 +14,27 @@ from docx import Document
 from io import BytesIO
 import time
 
-# --- Mobile Optimized UI ---
+# --- Mobile Optimized & Premium UI ---
 st.set_page_config(page_title="Translator", layout="centered")
 
 st.markdown("""
     <style>
-    /* Screen အပြည့်သုံးပြီး Scroll မလိုအောင်လုပ်ခြင်း */
     .stApp { background-color: #ffffff; }
     header, footer {visibility: hidden;}
+    .block-container { padding-top: 1rem !important; }
     
-    /* ကွက်လပ်များ လျှော့ချခြင်း */
-    .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; }
-    
-    /* ခလုတ်များအား ဘေးတိုက် စုစည်းခြင်း */
-    div.stButton > button {
-        border-radius: 8px; height: 3.5em; width: 100%; 
-        font-weight: bold; font-size: 14px;
+    /* ရွှေရောင်ဖိုင်နာမည် Style */
+    .file-name-gold {
+        color: #D4AF37; font-weight: bold; font-size: 16px;
+        text-align: center; margin-bottom: 10px;
     }
-    .metric-container { margin-bottom: -20px; }
+    
+    /* Icon နှင့် Percentage Style */
+    .status-icon { font-size: 18px; font-weight: bold; color: #1976d2; }
+    
+    div.stButton > button {
+        border-radius: 8px; height: 3.5em; width: 100%; font-weight: bold;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -42,14 +45,16 @@ if 'run' not in st.session_state: st.session_state.run = False
 translator = Translator()
 
 # --- Main Layout ---
-# ဖိုင်တင်ခြင်း (နေရာအနည်းဆုံးယူရန်)
 file = st.file_uploader("", type="pdf", label_visibility="collapsed")
 
 if file:
+    # ရွှေရောင်ဖြင့် ဖိုင်နာမည်ပြခြင်း
+    st.markdown(f'<div class="file-name-gold">📁 {file.name}</div>', unsafe_allow_html=True)
+    
     reader = PyPDF2.PdfReader(file)
     total = len(reader.pages)
     
-    # ခလုတ်များကို အပေါ်ဆုံးသို့ တင်လိုက်ခြင်း
+    # ခလုတ်များ (အပေါ်ဆုံးတွင် Fixed ပုံစံ)
     c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("▶ START"): st.session_state.run = True
@@ -66,24 +71,26 @@ if file:
         else:
             st.button("📥 WORD", disabled=True)
 
-    # Metrics နှင့် Progress ကို ခလုတ်အောက်မှာ ကပ်ထားခြင်း
-    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-    m1, m2, m3 = st.columns(3)
-    m1.caption(f"Total: {total}")
-    m2.caption(f"Done: {st.session_state.idx}")
-    m3.caption(f"Status: {int((st.session_state.idx/total)*100)}%")
+    # Status နှင့် Percentage (%) Icon
+    done_pc = int((st.session_state.idx/total)*100) if total > 0 else 0
+    
+    col_stat1, col_stat2 = st.columns(2)
+    with col_stat1:
+        st.caption(f"Page: {st.session_state.idx} / {total}")
+    with col_stat2:
+        # Icon နှင့် % ကိုပြခြင်း
+        st.markdown(f'<div style="text-align: right;" class="status-icon">✨ {done_pc}%</div>', unsafe_allow_html=True)
+    
     st.progress(st.session_state.idx / total)
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # Processing Logic
     if st.session_state.run and st.session_state.idx < total:
-        with st.spinner("Translating..."):
-            for i in range(st.session_state.idx, total):
-                if not st.session_state.run: break
-                txt = reader.pages[i].extract_text()
-                if txt:
-                    lines = [translator.translate(l, src='en', dest='my').text for l in txt.split('\n') if l.strip()]
-                    time.sleep(0.4)
-                    st.session_state.data.append((f"Page {i+1}", "\n".join(lines)))
-                st.session_state.idx = i + 1
-                st.rerun()
+        for i in range(st.session_state.idx, total):
+            if not st.session_state.run: break
+            txt = reader.pages[i].extract_text()
+            if txt:
+                lines = [translator.translate(l, src='en', dest='my').text for l in txt.split('\n') if l.strip()]
+                time.sleep(0.4)
+                st.session_state.data.append((f"Page {i+1}", "\n".join(lines)))
+            st.session_state.idx = i + 1
+            st.rerun()
