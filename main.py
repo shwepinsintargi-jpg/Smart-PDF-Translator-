@@ -1,5 +1,5 @@
 import sys
-# Python 3.13 တွင် cgi error မတက်စေရန် Patch ထည့်ခြင်း
+# Python 3.13 CGI Patch
 try:
     import cgi
 except ImportError:
@@ -16,95 +16,94 @@ from docx import Document
 from io import BytesIO
 import time
 
-# --- UI Configuration ---
-st.set_page_config(page_title="Professional PDF Translator", page_icon="🌐")
+# --- Premium Page Config ---
+st.set_page_config(page_title="AI PDF Translator Pro", layout="wide", initial_sidebar_state="collapsed")
+
+# --- Custom Styling (အဆင့်မြင့် App ပုံစံဖမ်းရန်) ---
 st.markdown("""
     <style>
-    .main { background-color: #fcfcfc; }
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; font-weight: bold; }
-    .status-info { background-color: #e1f5fe; padding: 15px; border-radius: 10px; border-left: 5px solid #01579b; }
+    .stApp { background-color: #f4f7f6; }
+    .main-card {
+        background-color: white; padding: 30px; border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px;
+    }
+    .status-badge {
+        padding: 5px 15px; border-radius: 20px; font-size: 0.8em; font-weight: bold;
+        background-color: #e3f2fd; color: #1976d2; border: 1px solid #bbdefb;
+    }
+    .stButton>button {
+        border-radius: 10px; height: 3em; transition: all 0.3s ease;
+    }
+    .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🌐 Smart PDF Translator (Auto-Resume)")
-st.write("အင်္ဂလိပ်ဘာသာမှ မြန်မာဘာသာသို့ တစ်ကြောင်းချင်းစီ သေချာစွာ ပြန်ပေးပါသည်။")
-
-# --- Session State (Resume စနစ်အတွက်) ---
-if 'current_idx' not in st.session_state:
-    st.session_state.current_idx = 0
-if 'results' not in st.session_state:
-    st.session_state.results = []
-if 'working' not in st.session_state:
-    st.session_state.working = False
+# --- Logic & Session State ---
+if 'idx' not in st.session_state: st.session_state.idx = 0
+if 'data' not in st.session_state: st.session_state.data = []
+if 'running' not in st.session_state: st.session_state.running = False
 
 translator = Translator()
 
-uploaded_file = st.file_uploader("PDF ဖိုင်ကို ဤနေရာတွင် တင်ပါ", type="pdf")
-
-if uploaded_file:
-    reader = PyPDF2.PdfReader(uploaded_file)
-    total_pages = len(reader.pages)
+# --- App UI Layout ---
+with st.container():
+    st.markdown('<div class="main-card">', unsafe_allow_html=True)
+    col_t1, col_t2 = st.columns([2, 1])
+    with col_t1:
+        st.title("🚀 AI PDF Translator Pro")
+    with col_t2:
+        st.markdown(f'<div style="text-align: right;"><span class="status-badge">Resume Support Enabled</span></div>', unsafe_allow_html=True)
     
-    st.markdown(f'<div class="status-info">စုစုပေါင်းစာမျက်နှာ: <b>{total_pages}</b> | လက်ရှိရောက်ရှိနေသောစာမျက်နှာ: <b>{st.session_state.current_idx}</b></div>', unsafe_allow_html=True)
-    st.write("")
+    # File Uploader
+    up_file = st.file_uploader("", type="pdf", label_visibility="collapsed")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("▶️ ဘာသာပြန်ခြင်း စတင်/ဆက်လုပ်ရန်"):
-            st.session_state.working = True
-    with col2:
-        if st.button("⏸️ ခေတ္တရပ်နားရန်"):
-            st.session_state.working = False
+if up_file:
+    reader = PyPDF2.PdfReader(up_file)
+    total = len(reader.pages)
+    
+    # Dashboard Grid
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c1:
+        st.metric("Total Pages", total)
+    with c2:
+        st.metric("Processed", st.session_state.idx)
+    with c3:
+        percent = int((st.session_state.idx / total) * 100) if total > 0 else 0
+        st.metric("Completion", f"{percent}%")
 
-    prog_bar = st.progress(st.session_state.current_idx / total_pages if total_pages > 0 else 0)
-    log = st.empty()
-
-    # --- ဘာသာပြန် လုပ်ငန်းစဉ် ---
-    if st.session_state.working and st.session_state.current_idx < total_pages:
-        for i in range(st.session_state.current_idx, total_pages):
-            if not st.session_state.working:
-                break
-            
-            try:
-                page_text = reader.pages[i].extract_text()
-                if page_text:
-                    lines = page_text.split('\n')
-                    translated_lines = []
-                    
-                    for line in lines:
-                        if line.strip():
-                            # တစ်ကြောင်းချင်းစီပြန်ခြင်း (Quality အတွက်)
-                            res = translator.translate(line, src='en', dest='my')
-                            translated_lines.append(res.text)
-                            time.sleep(0.4) # Google Block မခံရအောင် နားချိန်ထည့်ခြင်း
-                    
-                    final_text = "\n".join(translated_lines)
-                    st.session_state.results.append((f"Page {i+1}", final_text))
-                    
-                    st.session_state.current_idx = i + 1
-                    prog_bar.progress(st.session_state.current_idx / total_pages)
-                    log.success(f"✅ စာမျက်နှာ {i+1} ကို ဘာသာပြန်ဆိုပြီးပါပြီ။")
+    st.markdown('<div class="main-card">', unsafe_allow_html=True)
+    prog = st.progress(st.session_state.idx / total)
+    
+    # Controls
+    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1, 1, 1])
+    with ctrl_col1:
+        if st.button("▶️ Start / Resume"): st.session_state.running = True
+    with ctrl_col2:
+        if st.button("⏸️ Pause"): st.session_state.running = False
+    with ctrl_col3:
+        # Download Button (If data exists)
+        if st.session_state.data:
+            doc = Document()
+            for p, t in st.session_state.data:
+                doc.add_heading(p, level=2)
+                doc.add_paragraph(t)
+            out = BytesIO()
+            doc.save(out)
+            st.download_button("📥 Download Word", out.getvalue(), "translated.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    
+    # Processor Logic
+    if st.session_state.running and st.session_state.idx < total:
+        with st.spinner("ဘာသာပြန်ဆိုနေသည်... ခေတ္တစောင့်ဆိုင်းပါ"):
+            for i in range(st.session_state.idx, total):
+                if not st.session_state.running: break
                 
-            except Exception as e:
-                st.session_state.working = False
-                st.error("⚠️ အင်တာနက်ပြတ်တောက်မှု သို့မဟုတ် ချိတ်ဆက်မှုပြဿနာ ဖြစ်ပေါ်နေပါသည်။ အင်တာနက်ပြန်ရလျှင် 'ဆက်လုပ်ရန်' ကို နှိပ်ပါ။")
-                break
-
-    # --- Word ဖိုင်အဖြစ် Download ရယူရန် ---
-    if st.session_state.results:
-        doc = Document()
-        for page_num, text in st.session_state.results:
-            doc.add_heading(page_num, level=2)
-            doc.add_paragraph(text)
-        
-        output = BytesIO()
-        doc.save(output)
-        
-        st.markdown("---")
-        st.download_button(
-            label="📥 ဘာသာပြန်ပြီးသမျှစာမျက်နှာများကို Word ဖိုင်အဖြစ် ရယူရန်",
-            data=output.getvalue(),
-            file_name="Translated_Document.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  )
-      
+                txt = reader.pages[i].extract_text()
+                if txt:
+                    lines = [translator.translate(l, src='en', dest='my').text for l in txt.split('\n') if l.strip()]
+                    time.sleep(0.4)
+                    st.session_state.data.append((f"Page {i+1}", "\n".join(lines)))
+                
+                st.session_state.idx = i + 1
+                st.rerun() # UI ကို ချက်ချင်း Update ဖြစ်စေရန်
+    st.markdown('</div>', unsafe_allow_html=True)
